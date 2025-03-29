@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jsBenchee</title>
+    <style>
+
+    </style>
+
+<!-- 
+    <link rel="stylesheet" href="../dist/jsBenchee.css">
+-->
+</head>
+<body>
+    
+    <h1>Function Benchmark Test</h1>
+    <article id="benchmarks"></article>
+
+    <!-- 
+        <script src="../dist/jsBenchee.min.js"></script>
+    -->
+
+    <script type="module">
+
+        import {jsBenchee} from '../dist/jsBenchee.esm.min.js'
+
+
+let d = `
+        m 50 0 .00001.0001.001 10e-10         
+        Q 36.4 0 24.8 6.8        
+        t -18 18         
+        t -6.8 25.2         
+        C 0 63.8 5.6 76.3 14.65 85.35         
+        s 21.55 14.65 35.35 14.65      
+
+        a 50 25 -45 0115.8 -34.3
+         50 25 -45 0134.2 -25.7
+         
+        h -20-.5         
+        v -12.5-12.5         
+        H 75 50         
+        V 0   
+        z     
+
+        M 40 60 
+        h-20 
+        V 20
+        h 18 .5.5.5.5
+        z
+           
+        m -5 -35 
+        c 0 10 0 15 0 30 
+        q -5 0 -10 0
+        v-30
+        z`;
+
+
+        d = `M10000 10000h10000a10000 10000 0 1 1 -10000 -10000 z`;
+
+
+let options = {
+
+//define multiple tests
+tests: [
+    {
+        name: 'svg path commander',
+        scripts: [
+            `let pathData = SVGPathCommander.parsePathString(\`${d}\`)`,
+            'https://cdn.jsdelivr.net/gh/thednp/svg-path-commander@refs/heads/master/dist/svg-path-commander.js'
+        ]
+    },
+
+    {
+        name: 'fontello - svgpath',
+        scripts: [
+            `import svgpath from 'https://cdn.jsdelivr.net/npm/svgpath@2.6.0/+esm';
+            let d =\`${d}\`;
+            let pathData = new svgpath(d);
+            `
+        ]
+    },
+],
+
+iterations: 25,
+agentDetection: true,
+// target for report rendering
+target: '#benchmarks',
+render: true,
+logToConsole: true,
+exportMD: true,
+security: true,
+multipass: 1,
+multitask: true,
+// output variable result
+//returnVar: 'pathData'
+// define columns for report
+//includeColumns: ['name', 'average', 'highest', 'lowest']
+};
+
+
+
+/**
+ * jsbenchee
+ */
+
+ (async () => {
+    let benchmark = await new jsBenchee(options);
+    console.log('Async Benchmark Results:', benchmark);
+
+    /*
+    let benchmarkJson = JSON.parse(benchmark.resultsJSON)
+    console.log('benchmarkJson', benchmarkJson);
+    */
+})();
+
+
+    </script>
+
+
+</body>
+</html>

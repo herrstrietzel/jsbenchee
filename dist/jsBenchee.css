@@ -1,0 +1,137 @@
+ .jsBenchee-wrap {
+     font-family: monospace, 'Fira Sans', 'Open Sans', sans-serif;
+     border: 1px solid #000;
+     padding: 0.5em;
+     margin-bottom: 1em;
+     max-height: 9lh;
+     overflow: hidden;
+     transition: 1s max-height;
+ }
+
+ .jsBenchee-wrap * {
+     box-sizing: border-box;
+ }
+
+
+
+ .jsBenchee-pre {
+     display: block;
+     height: 10lh;
+     overflow: auto;
+     white-space: pre-wrap;
+ }
+
+ p.jsBenchee-heading {
+     font-size: 16px;
+     font-weight: 400;
+     margin-bottom: 1em;
+ }
+
+ .jsBenchee-spinner {
+     height: 1em;
+     stroke-width: 8px;
+     margin-left: 0.25em;
+     transform: scale(1.5) translateY(0.05em)
+ }
+
+ .jsBenchee-completed .jsBenchee-progress {
+     display: none
+ }
+
+ .jsBenchee-p {
+     margin: 0;
+ }
+
+
+ .jsBenchee-section {
+     margin-bottom: 1em;
+ }
+
+ .jsBenchee-table {
+     border-spacing: 1em 0;
+     margin-left: -1em;
+     width: 100%;
+ }
+
+ .jsBenchee-td {
+     text-align: right;
+     margin-right: 1em;
+ }
+
+ .jsBenchee-md {
+     width: 100;
+     white-space: pre-line;
+ }
+
+ .jsBenchee-ul {
+     padding-left: 1em;
+ }
+
+ .jsBenchee-li {
+     padding-left: 0em;
+ }
+
+ .jsBenchee-th,
+ .jsBenchee-td {
+     text-align: right;
+     border-bottom: 1px solid #000;
+     vertical-align: top;
+     max-width: 30ch;
+     border-collapse: collapse;
+ }
+
+ .jsBenchee-th:nth-of-type(1),
+ .jsBenchee-td:nth-of-type(1) {
+     font-weight: 700;
+     text-align: left;
+ }
+
+ .jsBenchee-details {
+     display: none;
+ }
+
+ .jsBenchee-completed .jsBenchee-details {
+     display: block;
+ }
+
+ .jsBenchee-completed {
+     max-height: 100vh;
+     overflow: auto;
+
+ }
+
+ .jsBenchee-td-label {
+     display: none;
+     font-weight: 700;
+ }
+
+
+ @media(max-width:640px) {
+
+     .jsBenchee-thead,
+     .jsBenchee-th {
+         display: none;
+     }
+
+     .jsBenchee-table,
+     .jsBenchee-tbody {
+         display: block;
+         margin-left: 0 !important;
+         border-spacing: 0;
+     }
+
+     .jsBenchee-td {
+         display: flex;
+         width: 100%;
+         max-width: 100% !important;
+         margin-right: 0em !important;
+     }
+
+     .jsBenchee-td-value {
+         margin-left: auto;
+     }
+
+     .jsBenchee-td-label {
+         display: block;
+     }
+ }
