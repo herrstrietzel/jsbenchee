@@ -283,9 +283,6 @@ async function benchmarkScript(scripts = [], name = '', iterations = 25, securit
 async function generateScriptBlocks(scripts = [], iframeID = '', type = '', security = true, returnVar = '') {
 
 
-
-
-
     /**
      * convert external script
      * to dataURL

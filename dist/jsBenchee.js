@@ -286,9 +286,6 @@
     async function generateScriptBlocks(scripts = [], iframeID = '', type = '', security = true, returnVar = '') {
 
 
-
-
-
         /**
          * convert external script
          * to dataURL
