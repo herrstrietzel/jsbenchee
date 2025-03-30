@@ -1,9 +1,5 @@
-//export * from './prototypes.js';
-//export * from './benchmark_iframe.js';
-//export * from './setup.js'
-
 import { detectBrowser, addJSbencheeStyles } from './setup.js';
-import { benchmarkScript, createReport} from './benchmark_iframe.js';
+import { benchmarkScript, createReport } from './benchmark_iframe.js';
 
 
 var JsBencheeCore = function ({
@@ -22,7 +18,6 @@ var JsBencheeCore = function ({
 } = {}) {
 
 
-
     return new Promise(async (resolve) => {
         this.tests = tests;
         this.iterations = iterations;
@@ -37,87 +32,51 @@ var JsBencheeCore = function ({
         this.addCSS = addCSS;
         this.returnVar = returnVar;
 
-        let agent = '';
-        if (agentDetection) agent = detectBrowser();
-        
-        /**
-         * merge object values
-         * for multipass
-         */
-        const mergeObjectValues = (obj1, obj2) => {
+        let agent = agentDetection ? detectBrowser() : '';
 
-            for (let key in obj1) {
-                let value1 = obj1[key];
-                let value2 = obj2[key];
-
-                if (Array.isArray(value1)) {
-                    obj1[key] = [...value1, ...value2]
-                } else if (isNaN(value1)) {
-                    //obj1[key] += `${value2}`
-                } else {
-                    obj1[key] = (value1 + value2) / 2
-                }
-            }
-
-            return obj1
-
-        }
 
 
         /**
-         * benchmark
+         * run benchmarks
          */
         const startBenchmarks = async () => {
-            if (addCSS) await addJSbencheeStyles();
 
-            let reportWrap = null;
-            let resultWrap = null;
-            let benchmarkConclusion = null;
-            let benchmarkMD = null;
+            /**
+             * merge object values
+             * for multipass
+             */
+            const mergeObjectValues = (obj1, obj2) => {
 
-            let info = agentDetection
-                ? `<p class="jsBenchee-p"><strong>Agent:</strong> ${agent} <strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`
-                : `<p class="jsBenchee-p"><strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`;
+                for (let key in obj1) {
+                    let value1 = obj1[key];
+                    let value2 = obj2[key];
 
-            let devToolsInfo = `<p class="jsBenchee-p"><strong>Note:</strong> It is recommended to close them while running benchmark test for more realistic results.<p>`;
-
-            let scriptNames = tests.map(test => `»${test.name}«`).join(', ');
-            let reportElMarkup = `
-        <div class="jsBenchee-wrap">
-            <p class="jsBenchee-heading">Benchmarking <strong>${scriptNames}</strong>
-                <span class="jsBenchee-progress">– please wait 
-                <svg class="icnSpinner jsBenchee-spinner" viewBox="0 0 100 100">
-                    <path stroke="currentColor" stroke-linejoin="round" fill="none" d="M 50 10 a 40 40 0  1 1 -40 40">
-                        <animateTransform attributeName="transform" type="rotate" dur="0.75s" values="0 50 50;360 50 50" repeatCount="indefinite"></animateTransform></path>
-                </svg>
-            </span>
-            </p>
-            <section class="jsBenchee-section jsBenchee-summary">${info}${devToolsInfo}</section>
-            <section class="jsBenchee-section jsBenchee-results"></section>
-            <section class="jsBenchee-section jsBenchee-conclusion"></section>
-            <details class="jsBenchee-details jsBenchee-markdown">
-                <summary class="jsBenchee-summary">MD output</summary>
-                <pre><code class="jsBenchee-md"></code></pre>
-            </details>
-        </div>`;
-
-            // Parse report elements
-            reportWrap = new DOMParser().parseFromString(reportElMarkup, 'text/html').querySelector('.jsBenchee-wrap');
-
-            resultWrap = reportWrap.querySelector('.jsBenchee-results');
-            benchmarkConclusion = reportWrap.querySelector('.jsBenchee-conclusion');
-            benchmarkMD = reportWrap.querySelector('.jsBenchee-md');
-
-            // Render report if necessary
-            target = target && render ? document.querySelector(`${target}`) : null;
-
-            if (render && !target) {
-                let targetNew = document.createElement('article');
-                targetNew.id = target.replace(/#|\./gi, '');
-                target = targetNew;
+                    if (Array.isArray(value1)) {
+                        obj1[key] = [...value1, ...value2]
+                    } else if (isNaN(value1)) {
+                        //obj1[key] += `${value2}`
+                    } else {
+                        obj1[key] = (value1 + value2) / 2
+                    }
+                }
+                return obj1
             }
 
-            if (render && target) {
+            let reportWrap, resultWrap, benchmarkMD;
+
+            // get report wrap
+            if (render) {
+                ({ reportWrap, resultWrap, benchmarkMD } = getReportWrap(agent, iterations, agentDetection, multipass, multitask, tests));
+
+                // Render report if necessary
+                target = target && render ? document.querySelector(`${target}`) : null;
+
+                if (!target) {
+                    let targetNew = document.createElement('article');
+                    targetNew.id = target.replace(/#|\./gi, '');
+                    target = targetNew;
+                    document.body.append(target);
+                }
                 target.append(reportWrap);
             }
 
@@ -167,9 +126,6 @@ var JsBencheeCore = function ({
 
             let { html, md } = createReport(benchmarks, includeColumns);
 
-            //this.resultMd = md;
-            //this.resultHtml = html;
-
             benchmarks.resultMd = md;
             benchmarks.resultHtml = html;
             benchmarks.resultsJSON = JSON.stringify({
@@ -179,9 +135,8 @@ var JsBencheeCore = function ({
             });
 
             // update rendered state
-            reportWrap.classList.add('jsBenchee-completed');
-
-            if (render && target) {
+            if (render) {
+                reportWrap.classList.add('jsBenchee-completed');
                 resultWrap.insertAdjacentHTML('beforeend', html);
                 benchmarkMD.textContent = '\n' + md;
             }
@@ -189,6 +144,46 @@ var JsBencheeCore = function ({
             // clear jsBencheeScriptcache
             jsBencheeScriptcache = {};
         }
+
+
+        /**
+         * create report wrap
+         */
+        const getReportWrap = (agent = '', iterations = 0, agentDetection = false, multipass = 1, multitask = false, tests = []) => {
+
+            let info = agentDetection
+                ? `<p class="jsBenchee-p"><strong>Agent:</strong> ${agent} <strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`
+                : `<p class="jsBenchee-p"><strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`;
+
+            let scriptNames = tests.map(test => `»${test.name}«`).join(', ');
+            let reportElMarkup = `
+        <div class="jsBenchee-wrap">
+            <p class="jsBenchee-heading">Benchmarking <strong>${scriptNames}</strong>
+                <span class="jsBenchee-progress">– please wait 
+                <span class="jsBenchee-progress-spinner"></span>
+            </span>
+            </p>
+            <section class="jsBenchee-section jsBenchee-summary">
+            ${info}
+            <p class="jsBenchee-p"><strong>Note:</strong> It is recommended to close them while running benchmark test for more realistic results.<p>
+            </section>
+            <section class="jsBenchee-section jsBenchee-results"></section>
+            <section class="jsBenchee-section jsBenchee-conclusion"></section>
+            <details class="jsBenchee-details jsBenchee-markdown">
+                <summary class="jsBenchee-summary">MD output</summary>
+                <pre class="jsBenchee-pre"><code class="jsBenchee-md"></code></pre>
+            </details>
+        </div>`;
+
+            // Parse report elements
+            let reportWrap = new DOMParser().parseFromString(reportElMarkup, 'text/html').querySelector('.jsBenchee-wrap'),
+                resultWrap = reportWrap.querySelector('.jsBenchee-results'),
+                benchmarkMD = reportWrap.querySelector('.jsBenchee-md');
+
+            return { reportWrap: reportWrap, resultWrap: resultWrap, benchmarkMD: benchmarkMD }
+
+        }
+
 
 
 
@@ -205,6 +200,10 @@ var JsBencheeCore = function ({
 
         // Cache external scripts
         let jsBencheeScriptcache = {};
+
+
+        // add report stylesheet
+        if (addCSS && render) await addJSbencheeStyles();
 
         // Run benchmark
         await startBenchmarks();

@@ -24,17 +24,26 @@ export function detectBrowser() {
 
 export async function addJSbencheeStyles() {
 
-
-    const currentScriptPath=function(level=1){
+    const currentScriptPath=()=>{
         let url = '';
         try{
-            let line=(new Error()).stack.split('\n')[level+1].split('@').pop();
-            var regex = /\(([^()]*)\)/g;
-            url = Array.from(line.matchAll(regex))[0][1].split('/').slice(0,-1).join('/');
-
+            url = (new Error())
+            .stack.split('\n')
+            .map(stack=>{return stack.split(' ')
+            .filter(Boolean)})[1]
+            .slice(-1)[0]
+            .replace(/\(|\)/g, '')
+            .split('/')
+            .slice(0,-1)
+            .join('/');
         }catch{
-            console.log('could not parse path');
+            url = performance.getEntries()
+            .slice(-1)[0].name.split('/')
+            .slice(0,-1)
+            .join('/');
         }
+
+        console.log('url', url);
         return url
     };
 

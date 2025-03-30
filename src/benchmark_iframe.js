@@ -485,6 +485,9 @@ export function createReport(benchmarks, includeColumns = []) {
     // create table body
     table += `<tbody class="jsBenchee-tbody">`;
 
+    // get object keys
+    let keys = Object.keys(results[0]);
+
     results.forEach((result, i) => {
 
         // add new row for each script
@@ -492,17 +495,18 @@ export function createReport(benchmarks, includeColumns = []) {
         tableMd += '| '
 
         // add property values
-        for (let key in result) {
+        for (let i=0;  i<keys.length; i++) {
+
+            let key = keys[i];
 
             let vals = result[key];
             vals = Array.isArray(vals) ? vals.map(val => { return (val && !isNaN(val) ? +val.toFixed(3) : val) }).join(', ') : vals;
-
 
             if (!isNaN(vals) && vals) {
                 vals = key === 'average' ? +vals.toFixed(1) : +vals.toFixed(3);
             }
 
-            table += `<td class="jsBenchee-td"><span class="jsBenchee-td-label">${key}:</span> <span class="jsBenchee-td-value">${vals}</span></td>`;
+            table += `<td class="jsBenchee-td  jsBenchee-td-${key}"><span class="jsBenchee-td-label">${key}:</span> <span class="jsBenchee-td-value jsBenchee-td-value-${key}">${vals}</span></td>`;
             tableMd += ` ${vals} | `;
 
         }

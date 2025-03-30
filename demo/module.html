@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,25 +9,29 @@
 
     </style>
 
-<!-- 
+    <!-- 
     <link rel="stylesheet" href="../dist/jsBenchee.css">
 -->
 </head>
+
 <body>
-    
+
     <h1>Function Benchmark Test</h1>
     <article id="benchmarks"></article>
 
     <!-- 
         <script src="../dist/jsBenchee.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/herrstrietzel/jsbenchee@main/dist/jsBenchee.min.js">
     -->
 
     <script type="module">
 
-        import {jsBenchee} from '../dist/jsBenchee.esm.min.js'
+        import { jsBenchee } from '../dist/jsBenchee.esm.min.js'
+        //import { jsBenchee } from 'https://cdn.jsdelivr.net/gh/herrstrietzel/jsbenchee@main/dist/jsBenchee.esm.min.js'
+        
 
 
-let d = `
+        let d = `
         m 50 0 .00001.0001.001 10e-10         
         Q 36.4 0 24.8 6.8        
         t -18 18         
@@ -59,64 +64,65 @@ let d = `
         d = `M10000 10000h10000a10000 10000 0 1 1 -10000 -10000 z`;
 
 
-let options = {
+        let options = {
 
-//define multiple tests
-tests: [
-    {
-        name: 'svg path commander',
-        scripts: [
-            `let pathData = SVGPathCommander.parsePathString(\`${d}\`)`,
-            'https://cdn.jsdelivr.net/gh/thednp/svg-path-commander@refs/heads/master/dist/svg-path-commander.js'
-        ]
-    },
+            //define multiple tests
+            tests: [
+                {
+                    name: 'svg path commander',
+                    scripts: [
+                        `let pathData = SVGPathCommander.parsePathString(\`${d}\`)`,
+                        'https://cdn.jsdelivr.net/gh/thednp/svg-path-commander@refs/heads/master/dist/svg-path-commander.js'
+                    ]
+                },
 
-    {
-        name: 'fontello - svgpath',
-        scripts: [
-            `import svgpath from 'https://cdn.jsdelivr.net/npm/svgpath@2.6.0/+esm';
+                {
+                    name: 'fontello - svgpath',
+                    scripts: [
+                        `import svgpath from 'https://cdn.jsdelivr.net/npm/svgpath@2.6.0/+esm';
             let d =\`${d}\`;
             let pathData = new svgpath(d);
             `
-        ]
-    },
-],
+                    ]
+                },
+            ],
 
-iterations: 25,
-agentDetection: true,
-// target for report rendering
-target: '#benchmarks',
-render: true,
-logToConsole: true,
-exportMD: true,
-security: true,
-multipass: 1,
-multitask: true,
-// output variable result
-//returnVar: 'pathData'
-// define columns for report
-//includeColumns: ['name', 'average', 'highest', 'lowest']
-};
+            iterations: 25,
+            agentDetection: true,
+            // target for report rendering
+            target: '#benchmarks',
+            render: true,
+            logToConsole: true,
+            exportMD: true,
+            security: true,
+            multipass: 1,
+            multitask: true,
+            // output variable result
+            //returnVar: 'pathData'
+            // define columns for report
+            //includeColumns: ['name', 'average', 'highest', 'lowest']
+        };
 
 
 
-/**
- * jsbenchee
- */
+        /**
+         * jsbenchee
+         */
 
- (async () => {
-    let benchmark = await new jsBenchee(options);
-    console.log('Async Benchmark Results:', benchmark);
+        (async () => {
+            let benchmark = await new jsBenchee(options);
+            console.log('Async Benchmark Results:', benchmark);
 
-    /*
-    let benchmarkJson = JSON.parse(benchmark.resultsJSON)
-    console.log('benchmarkJson', benchmarkJson);
-    */
-})();
+            /*
+            let benchmarkJson = JSON.parse(benchmark.resultsJSON)
+            console.log('benchmarkJson', benchmarkJson);
+            */
+        })();
 
 
     </script>
 
 
 </body>
+
 </html>
