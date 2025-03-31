@@ -35,7 +35,7 @@ export async function addJSbencheeStyles() {
             .slice(0, -1)
             .join('/');
 
-            if(urlPerf) return urlPerf;
+            //if(urlPerf) return urlPerf;
 
             /** 2. try error API */
             let stackLines = new Error().stack.split('\n');
