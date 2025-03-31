@@ -64,15 +64,22 @@ export async function addJSbencheeStyles() {
     if(!scriptPath.includes('dist')) scriptPath +='/dist';
 
     let url = scriptPath + '/jsBenchee.css';
+    console.log('CSSurl', url);
+
+
+    let styleEl = document.getElementById('jsBencheeStyles');
+    if (!styleEl) {
+        styleEl = document.createElement('style')
+        styleEl.id = 'jsBencheeStyles';
+        //document.body.append(styleEl);
+        document.body.insertBefore(styleEl, document.body.children[0]);
+    }
+
+
     let res = await (fetch(url))
 
     if (res.ok) {
         let css = await (res).text()
-        let styleEl = document.getElementById('jsBencheeStyles');
-        if (!styleEl) {
-            styleEl = document.createElement('style')
-            styleEl.textContent = css;
-            document.head.append(styleEl);
-        }
+        styleEl.textContent = css;
     }
 }

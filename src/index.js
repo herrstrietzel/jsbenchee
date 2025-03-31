@@ -22,17 +22,17 @@ var JsBencheeCore = function ({
     const agent = agentDetection ? detectBrowser() : '';
 
     // auto naming
-    tests.map(test=>{
-        if(!test.name)  {
-            let urls = test.scripts.filter(scr=>{return scr.includes('http')})
-            try{
-                if(urls.length){
+    tests.map(test => {
+        if (!test.name) {
+            let urls = test.scripts.filter(scr => { return scr.includes('http') })
+            try {
+                if (urls.length) {
                     let url = urls[0].match(/(https?:\/\/[^\s]+)/)[0].split('/').filter(Boolean).slice(2)
-                    test.name = url.sort((a, b) =>  b.length - a.length )[0];
+                    test.name = url.sort((a, b) => b.length - a.length)[0];
                 }
-            } catch{
+            } catch {
                 test.name = 'undefined'
-            }   
+            }
         }
     });
 
@@ -40,7 +40,7 @@ var JsBencheeCore = function ({
     // collect all benchmarks
     let benchmarks = {
         results: [],
-        names: [...new Set(tests.map((test,i) => test.name))],
+        names: [...new Set(tests.map((test, i) => test.name))],
         settings: this.settings
     };
 
@@ -98,13 +98,20 @@ var JsBencheeCore = function ({
             // Render report if necessary
             target = target && render ? document.querySelector(`${target}`) : null;
 
+            console.log('target', target);
+
+
             // no target selector defined
             if (!target) {
                 let targetNew = document.createElement('article');
                 targetNew.id = 'jsBencheeReport';
                 target = targetNew;
                 document.body.append(target);
+
+                console.log('create wrap');
             }
+
+            console.log('target', target);
             target.append(reportWrap);
         }
 
@@ -170,6 +177,7 @@ var JsBencheeCore = function ({
 
         // add report stylesheet
         if (addCSS && render) await addJSbencheeStyles();
+
 
         // Run benchmark
         await startBenchmarks();

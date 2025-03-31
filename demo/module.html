@@ -17,7 +17,10 @@
 <body>
 
     <h1>Function Benchmark Test</h1>
-    <article id="benchmarks"></article>
+    <!-- 
+        <article id="benchmarks"></article>
+
+    -->
 
     <!-- 
         <script src="../dist/jsBenchee.min.js"></script>
@@ -87,6 +90,7 @@
             agentDetection: true,
             // target for report rendering
             target: '#benchmarks',
+            addCSS:true,
             render: true,
             logToConsole: true,
             security: true,
@@ -94,7 +98,7 @@
             // output variable result
             returnVar: 'dNew',
             // define columns for report
-            includeColumns: ['name', 'average', 'highest', 'lowest', 'value']
+            includeColumns: ["name", "average", "highest", "lowest", "value"]
         };
 
 
