@@ -60,6 +60,9 @@ export async function addJSbencheeStyles() {
     let scriptPath = getCurrentScriptUrl();
     //console.log('scriptPath', scriptPath);
 
+    // dist path is excluded in modules
+    if(!scriptPath.includes('dist')) scriptPath +='/dist';
+
     let url = scriptPath + '/jsBenchee.css';
     let res = await (fetch(url))
 
