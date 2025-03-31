@@ -20,7 +20,25 @@ export default [
                 name: libName,
                 extend: true,
                 exports: 'named',
-                plugins: [terser()]
+                plugins: [terser({
+                    format: {
+                      beautify: false,
+                      preserve_annotations: false,
+                    },
+                    compress: {
+                      defaults: true,
+                      inline: true,
+                      reduce_vars: true,
+                      unused: true,
+                      hoist_funs: true,
+                      passes: 2, 
+                      drop_console: true,
+                    },
+                    mangle: {
+                      // Mangle variable names (smaller output)
+                      toplevel: true,
+                    },
+                  }),]
             },
         ]
     },

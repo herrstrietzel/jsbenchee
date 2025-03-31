@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jsBenchee</title>
+    <style>
+
+    </style>
+
+    <link rel="stylesheet" href="../dist/jsBenchee.css">
+</head>
+
+<body>
+
+    <h1>Function Benchmark Test</h1>
+    <article id="benchmarks"></article>
+
+    <script src="../dist/jsBenchee.js"></script>
+
+    <script>
+
+        let options = {
+            tests: [
+                {
+                    name: 'simple script',
+                    scripts: [
+                        `async function waitFor(ms = 100) {
+                            return new Promise(resolve => {
+                                setTimeout(() => resolve('waiting for' +ms+'ms'), ms);
+                            });
+                        }
+
+                        (async () => {
+                        let delay = await waitFor(15);
+                        return delay;
+                        })();`
+                    ],
+                },
+            ],
+        };
+
+        // init benchmark
+        let benchmark = new jsBenchee(options);
+
+
+    </script>
+
+
+</body>
+
+</html>

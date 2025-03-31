@@ -26,31 +26,43 @@
 
     async function addJSbencheeStyles() {
 
-        const currentScriptPath=()=>{
-            let url = '';
-            try{
-                url = (new Error())
-                .stack.split('\n')
-                .map(stack=>{return stack.split(' ')
-                .filter(Boolean)})[1]
-                .slice(-1)[0]
-                .replace(/\(|\)/g, '')
+
+        const getCurrentScriptUrl = ()=>{
+            try {
+
+
+                /** 1. try performance API */
+                let urlPerf = performance.getEntries()
+                .slice(1)[0].name.split('/')
+                .slice(0, -1)
+                .join('/');
+
+                if(urlPerf) return urlPerf;
+
+                /** 2. try error API */
+                let stackLines = new Error().stack.split('\n');
+                let relevantLine = stackLines[1] || stackLines[2];
+                if (!relevantLine) return null;
+                
+                // Extract URL using a more comprehensive regex
+                let urlError = relevantLine.match(/(https?:\/\/[^\s]+)/)[1]
                 .split('/')
                 .slice(0,-1)
                 .join('/');
-            }catch{
-                url = performance.getEntries()
-                .slice(-1)[0].name.split('/')
-                .slice(0,-1)
-                .join('/');
-            }
 
-            console.log('url', url);
-            return url
+                return urlError ;
+
+            } catch (e) {
+                console.warn("Could not retrieve script path", e);
+                return null;
+            }
         };
 
 
-        let url = currentScriptPath()+'/jsBenchee.css';
+        let scriptPath = getCurrentScriptUrl();
+        //console.log('scriptPath', scriptPath);
+
+        let url = scriptPath + '/jsBenchee.css';
         let res = await (fetch(url));
 
         if (res.ok) {
@@ -167,17 +179,8 @@
                 //console.log('is cached', iframeID);
             } else {
 
-                let iframeContent = `<!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                ${externalScriptContent}
-            <\/head>
-            <body>
-                ${moduleScriptContent}
-                ${inlineScriptsContent}
-            <\/body>
-            <\/html>`;
+                let iframeContent = `<!DOCTYPE html><html><head><meta charset="UTF-8">${externalScriptContent}<\/head>
+            <body>${moduleScriptContent}${inlineScriptsContent}<\/body><\/html>`;
 
                 dataUrl = `data:text/html,${encodeURIComponent(iframeContent)}`;
                 jsBencheeScriptcache[iframeID] = dataUrl;
@@ -216,7 +219,6 @@
                         //console.log('value', value);
                         results.value = value;
                     }
-
 
                     results.timings.push(benchmarkResult);
                     tries++;
@@ -265,7 +267,6 @@
                         // clear cache
                         iframe.contentWindow.location.replace('about:blank');
                         performance.clearResourceTimings();
-                        performance.clearMarks();
                         performance.clearMeasures();
 
                         //objectURL = URL.revokeObjectURL(objectURL);
@@ -279,21 +280,16 @@
 
             // Start the first iteration
             createBenchmarkIframe(moduleScriptContent, externalScriptContent, inlineScriptsContent, jsBencheeScriptcache, iframeID);
-
         }
         );
-
     }
-
 
 
     /**
      * generate script blocks
      * for temporary benchmarkiframe
      */
-
     async function generateScriptBlocks(scripts = [], iframeID = '', type = '', security = true, returnVar = '') {
-
 
         /**
          * convert external script
@@ -399,30 +395,82 @@
     }\n` :
             '';
 
-        scriptmarkup +=
-            `
-        ${externalScriptContent}
-        <script ${typeAtt}>
-        ${importContent}
-        ${strictMarkup}
-        const iframeID = '${iframeID}';
-        // disable alerts
-        window.alert = () => ()=>{let noalert=''};
-        window.addEventListener('load', () => {
-            const winOrigin = document.referrer;
-            let returnValue = '';
-            try {
-                let duration = 0;
-                const start = performance.now();
-                ${scriptContent};
-                duration = performance.now() - start;
-                ${returnVarPost}
-                parent.postMessage({ benchmarkResult: duration, value:returnValue, ID:iframeID, winOrigin: winOrigin}, '*');
 
-            } catch (err) {
-                parent.postMessage({ error: err.message }, '*');
+        function containsAsyncCode(scriptContent) {
+            // Check for common async patterns
+            const asyncPatterns = [
+                /\bawait\b/,
+                /\basync\b/,
+                /\.then\(/,
+                /\.catch\(/,
+                /\.finally\(/,
+                /new\s+Promise\(/i,
+                /fetch\(/,
+                /setTimeout\(/,
+                /setInterval\(/,
+                /requestAnimationFrame\(/i
+            ];
+            return asyncPatterns.some(pattern => pattern.test(scriptContent));
+        }
+
+        let isAsync = containsAsyncCode(scriptContent);
+
+        if(isAsync){
+            scriptContent = 
+            `
+        const pendingPromises = new Set();
+        const OriginalPromise = window.Promise;
+        
+        window.Promise = class TrackedPromise extends OriginalPromise {
+            constructor(executor) {
+                super((resolve, reject) => {
+                    executor(
+                        value => { pendingPromises.delete(this); resolve(value); },
+                        error => { pendingPromises.delete(this); reject(error); }
+                    );
+                });
+                pendingPromises.add(this);
             }
-        });
+        };
+        ${scriptContent}
+
+        delay = 0.5
+        // Wait for all promises
+        while (pendingPromises.size > 0) {
+            await Promise.race(Array.from(pendingPromises));
+            await new Promise(r => setTimeout(r, delay));
+        }
+        
+        // Restore original Promise
+        window.Promise = OriginalPromise;
+        `;
+        }
+
+
+        scriptmarkup += `
+    ${externalScriptContent}
+    <script ${typeAtt}>
+    ${importContent}
+    ${strictMarkup}
+    const iframeID = '${iframeID}';
+    window.alert = () => {};
+    
+    window.addEventListener('load', async () => {
+        let returnValue = '', t0=0, t1=0
+        try {
+            let delay = 0;
+            t0= performance.now();
+            // Execute script
+            ${scriptContent};
+            t1 = performance.now() - t0-delay;
+
+            ${returnVarPost}
+            parent.postMessage({ benchmarkResult: t1, value:returnValue, ID:iframeID}, '*');
+
+        } catch (err) {
+            parent.postMessage({ error: err.message, ID: iframeID }, '*');
+        }
+    });
     <\/script>`;
 
         return scriptmarkup;
@@ -480,6 +528,10 @@
 
     function createReport(benchmarks, includeColumns = []) {
 
+        // lib prefix just for CSS compression
+        const lb = 'jsBenchee';
+
+
         /**
          * filter result properties
          */
@@ -515,22 +567,22 @@
 
         // invalid result - remove
         if (results[0].average === 0) {
-            invalid += `»${results[0].name}« could not be benchmarked`;
+            invalid += `»${results[0].name}« could not be benchmarked. Please check the syntax for errors.`;
             results.shift();
         }
 
 
         let table = '';
-        table += '<table class="jsBenchee-table">';
+        table += `<table class="${lb}-table">`;
 
         // filter if specified
         if (includeColumns.length) results = filterObjectProperties(results, includeColumns);
 
 
         // create table header
-        table += `<thead class="jsBenchee-thead">\n<tr class="jsBenchee-tr">`;
+        table += `<thead class="${lb}-thead">\n<tr class="${lb}-tr">`;
         let thLabels = Object.keys(results[0]);
-        table += thLabels.map(th => { return `<th class="jsBenchee-th">${th}</th>` }).join('\n');
+        table += thLabels.map(th => { return `<th class="${lb}-th">${th}</th>` }).join('\n');
         // close table head
         table += `</tr>\n</thead>`;
 
@@ -547,7 +599,7 @@
         tableMd += '| ' + thLabels.map((th, i) => { return i === 0 ? `:--- | ` : `---: | ` }).join(' ') + '\n';
 
         // create table body
-        table += `<tbody class="jsBenchee-tbody">`;
+        table += `<tbody class="${lb}-tbody">`;
 
         // get object keys
         let keys = Object.keys(results[0]);
@@ -555,11 +607,11 @@
         results.forEach((result, i) => {
 
             // add new row for each script
-            table += `<tr class="jsBenchee-tr">`;
+            table += `<tr class="${lb}-tr">`;
             tableMd += '| ';
 
             // add property values
-            for (let i=0;  i<keys.length; i++) {
+            for (let i = 0; i < keys.length; i++) {
 
                 let key = keys[i];
 
@@ -570,7 +622,7 @@
                     vals = key === 'average' ? +vals.toFixed(1) : +vals.toFixed(3);
                 }
 
-                table += `<td class="jsBenchee-td  jsBenchee-td-${key}"><span class="jsBenchee-td-label">${key}:</span> <span class="jsBenchee-td-value jsBenchee-td-value-${key}">${vals}</span></td>`;
+                table += `<td class="${lb}-td  ${lb}-td-${key}"><span class="${lb}-td-label">${key}:</span> <span class="${lb}-td-value ${lb}-td-value-${key}">${vals}</span></td>`;
                 tableMd += ` ${vals} | `;
 
             }
@@ -580,8 +632,7 @@
 
         });
 
-        table += `</tbody>`;
-        table += '</table>';
+        table += `</tbody></table>`;
 
 
         /**
@@ -590,32 +641,39 @@
         // compare - get lowest value/fastest script
         results.sort((a, b) => a.average - b.average);
         let fastest = results[0];
-        let fastestAverage = +fastest.average.toFixed(3);
+        let fastestAverage = +fastest.average;
 
         let len = results.length;
-        let summary = '<ul class="jsBenchee-ul">';
+        let summary = `<ul class="${lb}-ul">`;
         let summaryMd = '';
 
 
         // compare multiple scripts
         for (let i = 0; len && i < len; i++) {
-            let bench = results[i], rat = 1;
+            let bench = results[i], rat = 1, diff = 0;
             let { name, average, timings } = bench;
             let feedback = '';
+            let significance = '';
 
             if (i === 0) {
-                feedback = `»${fastest.name}« is the fastest executing with an average of ${fastestAverage} ms`;
+                feedback = len > 1 ? `»${fastest.name}« is the fastest executing with an average of ${fastestAverage.toFixed(3)} ms` : `»${fastest.name}« is executing with an average of ${fastestAverage.toFixed(3)} ms`;
             } else {
                 rat = +(average / fastestAverage).toFixed(3);
+                diff = +(Math.abs(fastestAverage - average)).toFixed(3);
+
+                if (diff < 0.3 && fastestAverage < 1) {
+                    significance = `Not significant – differences are also caused by browser performance fluctuations.`;
+                }
+
                 let perc = +((rat - 1) * 100).toFixed(0);
-                feedback = `»${name}« is ~ ${rat} times / ~ ${perc}% slower than »${fastest.name}«`;
+                feedback = `»${name}« is ~ ${rat} times / ~ ${perc}% / ${diff}ms slower than »${fastest.name}«. ${significance}`;
             }
-            summary += `<li class="jsBenchee-li">${feedback}</li>`;
-            summaryMd += `* ${feedback}  \n`;
+            summary += `<li class="${lb}-li">${feedback}</li>`;
+            summaryMd += `* ${feedback}${significance}  \n`;
 
         }
         if (invalid) {
-            summary += `<li class="jsBenchee-li">${invalid}</li>`;
+            summary += `<li class="${lb}-li">${invalid}</li>`;
             summaryMd += `* ${invalid}  \n`;
         }
 
@@ -634,199 +692,167 @@
         tests = [],
         iterations = 25,
         target = '',
-        render = false,
+        render = true,
         agentDetection = false,
-        exportMD = false,
         security = true,
-        multipass = 1,
         multitask = true,
         includeColumns = [],
         addCSS = true,
         returnVar = ''
     } = {}) {
 
+        this.settings = { tests, iterations, target, render, agentDetection, includeColumns, multitask, security, addCSS, returnVar };
 
-        return new Promise(async (resolve) => {
-            this.tests = tests;
-            this.iterations = iterations;
-            this.target = target;
-            this.render = render;
-            this.agentDetection = agentDetection;
-            this.includeColumns = includeColumns;
-            this.multipass = multipass;
-            this.multitask = multitask;
-            this.exportMD = exportMD;
-            this.security = security;
-            this.addCSS = addCSS;
-            this.returnVar = returnVar;
+        // lib prefix just for CSS compression
+        const lb = 'jsBenchee';
+        const agent = agentDetection ? detectBrowser() : '';
 
-            let agent = agentDetection ? detectBrowser() : '';
-
-
-
-            /**
-             * run benchmarks
-             */
-            const startBenchmarks = async () => {
-
-                /**
-                 * merge object values
-                 * for multipass
-                 */
-                const mergeObjectValues = (obj1, obj2) => {
-
-                    for (let key in obj1) {
-                        let value1 = obj1[key];
-                        let value2 = obj2[key];
-
-                        if (Array.isArray(value1)) {
-                            obj1[key] = [...value1, ...value2];
-                        } else if (isNaN(value1)) ; else {
-                            obj1[key] = (value1 + value2) / 2;
-                        }
+        // auto naming
+        tests.map(test=>{
+            if(!test.name)  {
+                let urls = test.scripts.filter(scr=>{return scr.includes('http')});
+                try{
+                    if(urls.length){
+                        let url = urls[0].match(/(https?:\/\/[^\s]+)/)[0].split('/').filter(Boolean).slice(2);
+                        test.name = url.sort((a, b) =>  b.length - a.length )[0];
                     }
-                    return obj1
-                };
-
-                let reportWrap, resultWrap, benchmarkMD;
-
-                // get report wrap
-                if (render) {
-                    ({ reportWrap, resultWrap, benchmarkMD } = getReportWrap(agent, iterations, agentDetection, multipass, multitask, tests));
-
-                    // Render report if necessary
-                    target = target && render ? document.querySelector(`${target}`) : null;
-
-                    if (!target) {
-                        let targetNew = document.createElement('article');
-                        targetNew.id = target.replace(/#|\./gi, '');
-                        target = targetNew;
-                        document.body.append(target);
-                    }
-                    target.append(reportWrap);
-                }
-
-                multipass = multipass || 1;
-
-                const iframeIDs = tests.map(() => crypto.randomUUID());
-
-                for (let m = 0; m < multipass; m++) {
-                    if (multitask) {
-                        let benchmarkPromises = tests.map((test, i) =>
-                            benchmarkScript(test.scripts, test.name, iterations, security, jsBencheeScriptcache, iframeIDs[i], returnVar)
-                                .catch(error => ({
-                                    name: test.name,
-                                    error: error.message,
-                                    average: 0,
-                                    iterations: [],
-                                    results: []
-                                }))
-                        );
-
-                        const results = await Promise.allSettled(benchmarkPromises);
-
-                        results.forEach(result => {
-                            let benchmark = result.value;
-
-                            if (m === 0) {
-                                benchmarks.results.push(benchmark);
-                            } else if (m > 0 && multipass > 1) {
-                                let benchmarkPrev = benchmarks.results.find(bench => bench.name === benchmark.name);
-                                mergeObjectValues(benchmarkPrev, benchmark);
-                            }
-                        });
-                    } else {
-                        for (let i = 0, len = tests.length; len && i < len; i++) {
-                            const { scripts, name } = tests[i];
-                            const benchmark = await benchmarkScript(scripts, name, iterations, security, jsBencheeScriptcache, iframeIDs[i], returnVar);
-
-                            if (m === 0) {
-                                benchmarks.results.push(benchmark);
-                            } else if (m > 0 && multipass > 1) {
-                                let benchmarkPrev = benchmarks.results.find(bench => bench.name === benchmark.name);
-                                mergeObjectValues(benchmarkPrev, benchmark);
-                            }
-                        }
-                    }
-                }
-
-                let { html, md } = createReport(benchmarks, includeColumns);
-
-                benchmarks.resultMd = md;
-                benchmarks.resultHtml = html;
-                benchmarks.resultsJSON = JSON.stringify({
-                    agent: agent,
-                    iterations: iterations,
-                    results: benchmarks.results
-                });
-
-                // update rendered state
-                if (render) {
-                    reportWrap.classList.add('jsBenchee-completed');
-                    resultWrap.insertAdjacentHTML('beforeend', html);
-                    benchmarkMD.textContent = '\n' + md;
-                }
-
-                // clear jsBencheeScriptcache
-                jsBencheeScriptcache = {};
-            };
+                } catch{
+                    test.name = 'undefined';
+                }   
+            }
+        });
 
 
-            /**
-             * create report wrap
-             */
-            const getReportWrap = (agent = '', iterations = 0, agentDetection = false, multipass = 1, multitask = false, tests = []) => {
+        // collect all benchmarks
+        let benchmarks = {
+            results: [],
+            names: [...new Set(tests.map((test,i) => test.name))],
+            settings: this.settings
+        };
 
-                let info = agentDetection
-                    ? `<p class="jsBenchee-p"><strong>Agent:</strong> ${agent} <strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`
-                    : `<p class="jsBenchee-p"><strong>Iterations:</strong> ${iterations}  <strong>Multipass:</strong> ${multipass} <strong>Multitask:</strong>${multitask}<p>`;
+        // Cache external scripts
+        let jsBencheeScriptcache = {};
 
-                let scriptNames = tests.map(test => `»${test.name}«`).join(', ');
-                let reportElMarkup = `
-        <div class="jsBenchee-wrap">
-            <p class="jsBenchee-heading">Benchmarking <strong>${scriptNames}</strong>
-                <span class="jsBenchee-progress">– please wait 
-                <span class="jsBenchee-progress-spinner"></span>
+
+        /**
+         * create report wrap
+         */
+        const getReportWrap = (agent = '', iterations = 0, agentDetection = false, multitask = false, tests = []) => {
+
+            let info = `<strong>Iterations:</strong> ${iterations} Multitask:</strong>${multitask}`;
+            info = agentDetection ? `<strong>Agent:</strong> ${agent} <strong>` + info : info;
+
+            let scriptNames = tests.map(test => `»${test.name}«`).join(', ');
+            let reportElMarkup = `
+        <div class="${lb}-wrap">
+            <p class="${lb}-heading">Benchmarking <strong>${scriptNames}</strong>
+                <span class="${lb}-progress">– please wait <span class="${lb}-progress-spinner"></span>
             </span>
             </p>
-            <section class="jsBenchee-section jsBenchee-summary">
-            ${info}
-            <p class="jsBenchee-p"><strong>Note:</strong> It is recommended to close them while running benchmark test for more realistic results.<p>
-            </section>
-            <section class="jsBenchee-section jsBenchee-results"></section>
-            <section class="jsBenchee-section jsBenchee-conclusion"></section>
-            <details class="jsBenchee-details jsBenchee-markdown">
-                <summary class="jsBenchee-summary">MD output</summary>
-                <pre class="jsBenchee-pre"><code class="jsBenchee-md"></code></pre>
+            <div class="${lb}-section ${lb}-summary">
+            <p class="${lb}-p"> ${info}</p>
+            <p class="${lb}-p"><strong>Note:</strong> It is recommended to close them while running benchmark test for more realistic results.</p>
+            </div>
+            <div class="${lb}-section ${lb}-results"></div>
+            <details class="${lb}-details ${lb}-markdown">
+                <summary class="j${lb}-summary">MD output</summary>
+                <textarea class="${lb}-textarea" readonly></textarea>
             </details>
         </div>`;
 
-                // Parse report elements
-                let reportWrap = new DOMParser().parseFromString(reportElMarkup, 'text/html').querySelector('.jsBenchee-wrap'),
-                    resultWrap = reportWrap.querySelector('.jsBenchee-results'),
-                    benchmarkMD = reportWrap.querySelector('.jsBenchee-md');
+            // Parse report elements
+            let reportWrap = new DOMParser().parseFromString(reportElMarkup, 'text/html').querySelector(`.${lb}-wrap`),
+                resultWrap = reportWrap.querySelector(`.${lb}-results`),
+                benchmarkMD = reportWrap.querySelector(`.${lb}-textarea`);
 
-                return { reportWrap: reportWrap, resultWrap: resultWrap, benchmarkMD: benchmarkMD }
+            return { reportWrap: reportWrap, resultWrap: resultWrap, benchmarkMD: benchmarkMD }
 
-            };
-
-
+        };
 
 
-            // collect all benchmarks
-            let benchmarks = {
-                results: [],
-                names: [...new Set(tests.map(test => test.name))],
+        /**
+         * run benchmarks
+         */
+        const startBenchmarks = async () => {
+
+            let reportWrap, resultWrap, benchmarkMD;
+
+            // get report wrap
+            if (render) {
+                ({ reportWrap, resultWrap, benchmarkMD } = getReportWrap(agent, iterations, agentDetection, multitask, tests));
+
+                // Render report if necessary
+                target = target && render ? document.querySelector(`${target}`) : null;
+
+                // no target selector defined
+                if (!target) {
+                    let targetNew = document.createElement('article');
+                    targetNew.id = 'jsBencheeReport';
+                    target = targetNew;
+                    document.body.append(target);
+                }
+                target.append(reportWrap);
+            }
+
+
+            const iframeIDs = tests.map(() => crypto.randomUUID());
+
+
+            if (multitask) {
+                let benchmarkPromises = tests.map((test, i) =>
+                    benchmarkScript(test.scripts, test.name, iterations, security, jsBencheeScriptcache, iframeIDs[i], returnVar)
+                        .catch(error => ({
+                            name: test.name,
+                            error: error.message,
+                            average: 0,
+                            iterations: [],
+                            results: []
+                        }))
+                );
+
+                const results = await Promise.allSettled(benchmarkPromises);
+
+                results.forEach(result => {
+                    let benchmark = result.value;
+                    benchmarks.results.push(benchmark);
+                });
+            } else {
+                for (let i = 0, len = tests.length; len && i < len; i++) {
+                    const { scripts, name } = tests[i];
+                    const benchmark = await benchmarkScript(scripts, name, iterations, security, jsBencheeScriptcache, iframeIDs[i], returnVar);
+                    benchmarks.results.push(benchmark);
+                }
+            }
+
+
+            let { html, md } = createReport(benchmarks, includeColumns);
+
+            benchmarks.resultMd = md;
+            benchmarks.resultHtml = html;
+            benchmarks.resultsJSON = JSON.stringify({
                 agent: agent,
                 iterations: iterations,
-                multipass: multipass,
-                multitask: multitask,
-                returnVar: returnVar
-            };
+                results: benchmarks.results
+            });
 
-            // Cache external scripts
-            let jsBencheeScriptcache = {};
+            // update rendered state
+            if (render) {
+                reportWrap.classList.add(`${lb}-completed`);
+                resultWrap.insertAdjacentHTML('beforeend', html);
+                benchmarkMD.value = '\n' + md;
+            }
 
+            // clear jsBencheeScriptcache
+            jsBencheeScriptcache = {};
+        };
+
+
+        /**
+         * start the actual tests
+         * collect data in benchmarks object
+         */
+
+        return new Promise(async (resolve) => {
 
             // add report stylesheet
             if (addCSS && render) await addJSbencheeStyles();

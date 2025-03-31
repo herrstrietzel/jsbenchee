@@ -24,31 +24,43 @@ export function detectBrowser() {
 
 export async function addJSbencheeStyles() {
 
-    const currentScriptPath=()=>{
-        let url = '';
-        try{
-            url = (new Error())
-            .stack.split('\n')
-            .map(stack=>{return stack.split(' ')
-            .filter(Boolean)})[1]
-            .slice(-1)[0]
-            .replace(/\(|\)/g, '')
+
+    const getCurrentScriptUrl = ()=>{
+        try {
+
+
+            /** 1. try performance API */
+            let urlPerf = performance.getEntries()
+            .slice(1)[0].name.split('/')
+            .slice(0, -1)
+            .join('/');
+
+            if(urlPerf) return urlPerf;
+
+            /** 2. try error API */
+            let stackLines = new Error().stack.split('\n');
+            let relevantLine = stackLines[1] || stackLines[2];
+            if (!relevantLine) return null;
+            
+            // Extract URL using a more comprehensive regex
+            let urlError = relevantLine.match(/(https?:\/\/[^\s]+)/)[1]
             .split('/')
             .slice(0,-1)
             .join('/');
-        }catch{
-            url = performance.getEntries()
-            .slice(-1)[0].name.split('/')
-            .slice(0,-1)
-            .join('/');
+
+            return urlError ;
+
+        } catch (e) {
+            console.warn("Could not retrieve script path", e);
+            return null;
         }
-
-        console.log('url', url);
-        return url
-    };
+    }
 
 
-    let url = currentScriptPath()+'/jsBenchee.css';
+    let scriptPath = getCurrentScriptUrl();
+    //console.log('scriptPath', scriptPath);
+
+    let url = scriptPath + '/jsBenchee.css';
     let res = await (fetch(url))
 
     if (res.ok) {

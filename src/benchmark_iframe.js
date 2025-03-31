@@ -1,5 +1,3 @@
-
-
 export async function benchmarkScript(scripts = [], name = '', iterations = 25, security = true, jsBencheeScriptcache = {}, iframeID = '', returnVar = '') {
 
     /**
@@ -103,17 +101,8 @@ export async function benchmarkScript(scripts = [], name = '', iterations = 25, 
             //console.log('is cached', iframeID);
         } else {
 
-            let iframeContent = `<!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                ${externalScriptContent}
-            <\/head>
-            <body>
-                ${moduleScriptContent}
-                ${inlineScriptsContent}
-            <\/body>
-            <\/html>`;
+            let iframeContent = `<!DOCTYPE html><html><head><meta charset="UTF-8">${externalScriptContent}<\/head>
+            <body>${moduleScriptContent}${inlineScriptsContent}<\/body><\/html>`;
 
             dataUrl = `data:text/html,${encodeURIComponent(iframeContent)}`;
             jsBencheeScriptcache[iframeID] = dataUrl
@@ -152,7 +141,6 @@ export async function benchmarkScript(scripts = [], name = '', iterations = 25, 
                     //console.log('value', value);
                     results.value = value
                 }
-
 
                 results.timings.push(benchmarkResult)
                 tries++
@@ -201,7 +189,6 @@ export async function benchmarkScript(scripts = [], name = '', iterations = 25, 
                     // clear cache
                     iframe.contentWindow.location.replace('about:blank');
                     performance.clearResourceTimings();
-                    performance.clearMarks();
                     performance.clearMeasures();
 
                     //objectURL = URL.revokeObjectURL(objectURL);
@@ -215,21 +202,16 @@ export async function benchmarkScript(scripts = [], name = '', iterations = 25, 
 
         // Start the first iteration
         createBenchmarkIframe(moduleScriptContent, externalScriptContent, inlineScriptsContent, jsBencheeScriptcache, iframeID)
-
     }
     );
-
 }
-
 
 
 /**
  * generate script blocks
  * for temporary benchmarkiframe
  */
-
 export async function generateScriptBlocks(scripts = [], iframeID = '', type = '', security = true, returnVar = '') {
-
 
     /**
      * convert external script
@@ -335,30 +317,82 @@ export async function generateScriptBlocks(scripts = [], iframeID = '', type = '
     }\n` :
         '';
 
-    scriptmarkup +=
-        `
-        ${externalScriptContent}
-        <script ${typeAtt}>
-        ${importContent}
-        ${strictMarkup}
-        const iframeID = '${iframeID}';
-        // disable alerts
-        window.alert = () => ()=>{let noalert=''};
-        window.addEventListener('load', () => {
-            const winOrigin = document.referrer;
-            let returnValue = '';
-            try {
-                let duration = 0;
-                const start = performance.now();
-                ${scriptContent};
-                duration = performance.now() - start;
-                ${returnVarPost}
-                parent.postMessage({ benchmarkResult: duration, value:returnValue, ID:iframeID, winOrigin: winOrigin}, '*');
 
-            } catch (err) {
-                parent.postMessage({ error: err.message }, '*');
+    function containsAsyncCode(scriptContent) {
+        // Check for common async patterns
+        const asyncPatterns = [
+            /\bawait\b/,
+            /\basync\b/,
+            /\.then\(/,
+            /\.catch\(/,
+            /\.finally\(/,
+            /new\s+Promise\(/i,
+            /fetch\(/,
+            /setTimeout\(/,
+            /setInterval\(/,
+            /requestAnimationFrame\(/i
+        ];
+        return asyncPatterns.some(pattern => pattern.test(scriptContent));
+    }
+
+    let isAsync = containsAsyncCode(scriptContent);
+
+    if(isAsync){
+        scriptContent = 
+        `
+        const pendingPromises = new Set();
+        const OriginalPromise = window.Promise;
+        
+        window.Promise = class TrackedPromise extends OriginalPromise {
+            constructor(executor) {
+                super((resolve, reject) => {
+                    executor(
+                        value => { pendingPromises.delete(this); resolve(value); },
+                        error => { pendingPromises.delete(this); reject(error); }
+                    );
+                });
+                pendingPromises.add(this);
             }
-        });
+        };
+        ${scriptContent}
+
+        delay = 0.5
+        // Wait for all promises
+        while (pendingPromises.size > 0) {
+            await Promise.race(Array.from(pendingPromises));
+            await new Promise(r => setTimeout(r, delay));
+        }
+        
+        // Restore original Promise
+        window.Promise = OriginalPromise;
+        `
+    }
+
+
+    scriptmarkup += `
+    ${externalScriptContent}
+    <script ${typeAtt}>
+    ${importContent}
+    ${strictMarkup}
+    const iframeID = '${iframeID}';
+    window.alert = () => {};
+    
+    window.addEventListener('load', async () => {
+        let returnValue = '', t0=0, t1=0
+        try {
+            let delay = 0;
+            t0= performance.now();
+            // Execute script
+            ${scriptContent};
+            t1 = performance.now() - t0-delay;
+
+            ${returnVarPost}
+            parent.postMessage({ benchmarkResult: t1, value:returnValue, ID:iframeID}, '*');
+
+        } catch (err) {
+            parent.postMessage({ error: err.message, ID: iframeID }, '*');
+        }
+    });
     <\/script>`;
 
     return scriptmarkup;
@@ -416,6 +450,10 @@ export function detectUnsafeCode(script) {
 
 export function createReport(benchmarks, includeColumns = []) {
 
+    // lib prefix just for CSS compression
+    const lb = 'jsBenchee';
+
+
     /**
      * filter result properties
      */
@@ -451,22 +489,22 @@ export function createReport(benchmarks, includeColumns = []) {
 
     // invalid result - remove
     if (results[0].average === 0) {
-        invalid += `»${results[0].name}« could not be benchmarked`;
+        invalid += `»${results[0].name}« could not be benchmarked. Please check the syntax for errors.`;
         results.shift()
     }
 
 
     let table = '';
-    table += '<table class="jsBenchee-table">';
+    table += `<table class="${lb}-table">`;
 
     // filter if specified
     if (includeColumns.length) results = filterObjectProperties(results, includeColumns);
 
 
     // create table header
-    table += `<thead class="jsBenchee-thead">\n<tr class="jsBenchee-tr">`;
+    table += `<thead class="${lb}-thead">\n<tr class="${lb}-tr">`;
     let thLabels = Object.keys(results[0]);
-    table += thLabels.map(th => { return `<th class="jsBenchee-th">${th}</th>` }).join('\n');
+    table += thLabels.map(th => { return `<th class="${lb}-th">${th}</th>` }).join('\n');
     // close table head
     table += `</tr>\n</thead>`;
 
@@ -483,7 +521,7 @@ export function createReport(benchmarks, includeColumns = []) {
     tableMd += '| ' + thLabels.map((th, i) => { return i === 0 ? `:--- | ` : `---: | ` }).join(' ') + '\n';
 
     // create table body
-    table += `<tbody class="jsBenchee-tbody">`;
+    table += `<tbody class="${lb}-tbody">`;
 
     // get object keys
     let keys = Object.keys(results[0]);
@@ -491,11 +529,11 @@ export function createReport(benchmarks, includeColumns = []) {
     results.forEach((result, i) => {
 
         // add new row for each script
-        table += `<tr class="jsBenchee-tr">`;
+        table += `<tr class="${lb}-tr">`;
         tableMd += '| '
 
         // add property values
-        for (let i=0;  i<keys.length; i++) {
+        for (let i = 0; i < keys.length; i++) {
 
             let key = keys[i];
 
@@ -506,7 +544,7 @@ export function createReport(benchmarks, includeColumns = []) {
                 vals = key === 'average' ? +vals.toFixed(1) : +vals.toFixed(3);
             }
 
-            table += `<td class="jsBenchee-td  jsBenchee-td-${key}"><span class="jsBenchee-td-label">${key}:</span> <span class="jsBenchee-td-value jsBenchee-td-value-${key}">${vals}</span></td>`;
+            table += `<td class="${lb}-td  ${lb}-td-${key}"><span class="${lb}-td-label">${key}:</span> <span class="${lb}-td-value ${lb}-td-value-${key}">${vals}</span></td>`;
             tableMd += ` ${vals} | `;
 
         }
@@ -516,8 +554,7 @@ export function createReport(benchmarks, includeColumns = []) {
 
     })
 
-    table += `</tbody>`;
-    table += '</table>';
+    table += `</tbody></table>`;
 
 
     /**
@@ -526,33 +563,40 @@ export function createReport(benchmarks, includeColumns = []) {
     // compare - get lowest value/fastest script
     results.sort((a, b) => a.average - b.average);
     let fastest = results[0];
-    let fastestAverage = +fastest.average.toFixed(3);
+    let fastestAverage = +fastest.average;
 
     let len = results.length;
-    let summary = '<ul class="jsBenchee-ul">';
+    let summary = `<ul class="${lb}-ul">`;
     let summaryMd = '';
 
 
     // compare multiple scripts
     for (let i = 0; len && i < len; i++) {
-        let bench = results[i], rat = 1;
+        let bench = results[i], rat = 1, diff = 0;
         let { name, average, timings } = bench;
         let feedback = ''
+        let significance = '';
 
         if (i === 0) {
-            feedback = `»${fastest.name}« is the fastest executing with an average of ${fastestAverage} ms`
+            feedback = len > 1 ? `»${fastest.name}« is the fastest executing with an average of ${fastestAverage.toFixed(3)} ms` : `»${fastest.name}« is executing with an average of ${fastestAverage.toFixed(3)} ms`;
         } else {
             rat = +(average / fastestAverage).toFixed(3);
+            diff = +(Math.abs(fastestAverage - average)).toFixed(3);
+
+            if (diff < 0.3 && fastestAverage < 1) {
+                significance = `Not significant – differences are also caused by browser performance fluctuations.`
+            }
+
             let perc = +((rat - 1) * 100).toFixed(0)
-            feedback = `»${name}« is ~ ${rat} times / ~ ${perc}% slower than »${fastest.name}«`
+            feedback = `»${name}« is ~ ${rat} times / ~ ${perc}% / ${diff}ms slower than »${fastest.name}«. ${significance}`
         }
-        summary += `<li class="jsBenchee-li">${feedback}</li>`;
-        summaryMd += `* ${feedback}  \n`;
+        summary += `<li class="${lb}-li">${feedback}</li>`;
+        summaryMd += `* ${feedback}${significance}  \n`;
 
     };
 
     if (invalid) {
-        summary += `<li class="jsBenchee-li">${invalid}</li>`
+        summary += `<li class="${lb}-li">${invalid}</li>`
         summaryMd += `* ${invalid}  \n`;
     }
 
